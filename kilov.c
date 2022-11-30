@@ -674,6 +674,13 @@ void editorMoveCursor(int key)
       E.cx = 0;
       E.coloff = 0;
     }
+    else
+    {
+      // 存在しないとき、エラーメッセージを表示する
+      char errorMessage[64];
+      snprintf(errorMessage, sizeof(errorMessage), "The next line does not exist in current text file.");
+      editorSetStatusMessage(errorMessage);
+    }
     break;
 
   case '-':                                   // カーソルを前の行の先頭に移動する
@@ -693,6 +700,13 @@ void editorMoveCursor(int key)
       // 現在の行がファイル内またはファイル終了を表す独自の表示`~`の行に存在することは保証されているので、現在の行の行頭もかならず存在する
       E.cx = 0;
       E.coloff = 0;
+    }
+    else
+    {
+      // 存在しないとき、エラーメッセージを表示する
+      char errorMessage[64];
+      snprintf(errorMessage, sizeof(errorMessage), "The previous line does not exist in current text file.");
+      editorSetStatusMessage(errorMessage);
     }
     break;
 
