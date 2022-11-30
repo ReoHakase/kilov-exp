@@ -73,18 +73,21 @@ typedef struct erow
 
 struct editorConfig
 {
-  int cx, cy;     /* Cursor x and y position in characters */
-  int rowoff;     /* Offset of row displayed. */
-  int coloff;     /* Offset of column displayed. */
-  int screenrows; /* Number of rows that we can show */
-  int screencols; /* Number of cols that we can show */
-  int numrows;    /* Number of rows */
-  int rawmode;    /* Is terminal raw mode enabled? */
-  erow *row;      /* Rows */
-  int dirty;      /* File modified but not saved. */
-  char *filename; /* Currently open filename */
-  char statusmsg[80];
-  time_t statusmsg_time;
+  // row, colともに0から数え始める
+  int cx, cy;            /* 画面中での文字単位でのカーソルの(行, 列)=(x, y)座標 */
+  int rowoff;            /* 画面に表示されているもっとも上の行の番号 */
+  int coloff;            /* 画面に表示されているもっとも左の列の番号 */
+  int screenrows;        /* 画面に一度に表示可能な行の数 */
+  int screencols;        /* 画面に一度に表示可能な列の数 */
+  int numrows;           /* 開いているテキストファイルに含まれている行の数 */
+  int rawmode;           /* Is terminal raw mode enabled? */
+  erow *row;             /* 行のテキストとハイライト情報と長さ等のデータを含む構造体を指すポインタ */
+  int dirty;             /* 未保存の編集内容があるかどうかを表すフラグ */
+  char *filename;        /* 開いているファイルの名前 */
+  char statusmsg[80];    // UI下部のナビゲーションバーに表示する、状態を表すメッセージの文字列
+                         // 左寄せで`${ファイル名} - ${テキストファイルの行数} ${編集済みかどうか}`
+                         // 右寄せで`${カーソルのテキストファイル中での行座標}/${テキストファイルの行数}`の形式。
+  time_t statusmsg_time; // 状態を表すメッセージが追加された日時時刻をUNIXエポックからの経過秒数で表す。
 };
 
 static struct editorConfig E;
@@ -645,13 +648,54 @@ void editorSetStatusMessage(const char *fmt, ...)
 /* Handle cursor position change because arrow keys were pressed. */
 void editorMoveCursor(int key)
 {
-  int filerow = E.rowoff + E.cy;
-  int filecol = E.coloff + E.cx;
+  int filerow = E.rowoff + E.cy; // カーソルが指しているファイル内での行
+  int filecol = E.coloff + E.cx; // カーソルが指しているファイル内での列
   int rowlen;
   erow *row = (filerow >= E.numrows) ? NULL : &E.row[filerow];
 
   switch (key)
   {
+
+  case ENTER:                                // カーソルを次の行の先頭に移動する
+    if (filerow >= 0 && filerow < E.numrows) // 次の行がファイル内もしくは、ファイル終了を表す独自の表示`~`の行に存在するとき、
+    {
+      // カーソルを1行下に移動
+      if (E.cy == E.screenrows - 1) // カーソルが画面内で一番下の行にあるとき、
+      {
+        E.rowoff++; // 表示する画面枠ごと下に1行分ずらす
+      }
+      else
+      {
+        E.cy += 1; // 表示する画面枠内でのカーソルを1行下に移動
+      }
+
+      // カーソルを行頭に移動
+      // 現在の行が存在することは保証されているので、現在の行の行頭もかならず存在する
+      E.cx = 0;
+      E.coloff = 0;
+    }
+    break;
+
+  case '-':                                   // カーソルを前の行の先頭に移動する
+    if (filerow >= 1 && filerow <= E.numrows) // 前の行がファイル内もしくは、ファイル終了を表す独自の表示`~`の行に存在するとき、
+    {
+      // カーソルを1行上に移動
+      if (E.cy == 0) // カーソルが画面内で一番上の行にあるとき、
+      {
+        E.rowoff--; // 表示する画面枠ごと上に1行分ずらす
+      }
+      else
+      {
+        E.cy -= 1; // 表示する画面枠内でのカーソルを1行上に移動
+      }
+
+      // カーソルを行頭に移動
+      // 現在の行がファイル内またはファイル終了を表す独自の表示`~`の行に存在することは保証されているので、現在の行の行頭もかならず存在する
+      E.cx = 0;
+      E.coloff = 0;
+    }
+    break;
+
   case ARROW_LEFT:
     if (E.cx == 0)
     {
@@ -786,6 +830,8 @@ void editorProcessKeypress(int fd)
     }
     break;
 
+  case ENTER:
+  case '-':
   case ARROW_UP:
   case ARROW_DOWN:
   case ARROW_LEFT:
